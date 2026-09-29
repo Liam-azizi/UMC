@@ -880,8 +880,12 @@ a{color:inherit}
         <span>9901 Tujunga Canyon Blvd, Tujunga CA 91042</span>
       </div>
     </div>
-    <form class="c-form rv d1" id="contactForm" action="mailto:office@tujungachurch.com" method="post" enctype="text/plain">
+    <form class="c-form rv d1" id="contactForm" action="https://api.web3forms.com/submit" method="POST">
       <div class="c-body">
+      <input type="hidden" name="access_key" value="96aea0de-40d5-42fb-87b1-e06fa875e0fd">
+      <input type="hidden" name="subject" value="New message from the church website">
+      <input type="hidden" name="from_name" value="Tujunga UMC website">
+      <input type="checkbox" name="botcheck" style="display:none" tabindex="-1" autocomplete="off" aria-hidden="true">
       <div class="f-row2">
         <label>Your name
           <input type="text" name="name" required autocomplete="name" placeholder="First and last name">
@@ -911,17 +915,17 @@ a{color:inherit}
         <textarea name="message" rows="6" required placeholder="Write your message here..."></textarea>
       </label>
       <button class="btn btn-flame" type="submit">Send message <span class="arr">&#8594;</span></button>
-      <p class="f-note">Sending opens your email app with this message ready, addressed to the church office. We usually reply within a couple of days.</p>
+      <p class="f-note">Your message goes straight to the church office. We usually reply within a couple of days.</p>
       </div>
       <div class="c-done" id="formDone" aria-live="polite" hidden>
         <span class="c-done-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M5 12.5l4.5 4.5L19 7.5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-        <h3 class="c-done-h display" tabindex="-1">Your email is <em>ready.</em></h3>
-        <p class="c-done-p">We opened your email app with this message addressed to <strong>office@tujungachurch.com</strong>. Press send there and it is on its way.</p>
-        <div class="c-done-actions">
+        <h3 class="c-done-h display" tabindex="-1" id="doneHead">Message <em>sent.</em></h3>
+        <p class="c-done-p" id="doneBody"></p>
+        <div class="c-done-actions" id="doneFallback" hidden>
           <button type="button" class="btn btn-ink" id="formOpenAgain">Open my email app <span class="arr">&#8594;</span></button>
           <button type="button" class="btn btn-ghost-ink" id="formCopy">Copy the message</button>
         </div>
-        <p class="f-note">Nothing opened? Email <a href="mailto:office@tujungachurch.com">office@tujungachurch.com</a> or call <a href="tel:+18183521481">818-352-1481</a>. <button type="button" class="linkish" id="formAgain">Write another message</button></p>
+        <p class="f-note"><span id="doneNote"></span> <button type="button" class="linkish" id="formAgain">Write another message</button></p>
       </div>
     </form>
   </div>
@@ -1117,12 +1121,18 @@ if(dd){
   addEventListener("keydown", function(e){ if(e.key === "Escape") ddSet(false); });
 }
 
-/* ---------- contact form: hands the message to the visitor's email app ---------- */
+/* ---------- contact form: sends via Web3Forms, falls back to the visitor's email app ---------- */
 var cForm = document.getElementById("contactForm");
 if(cForm){
   var cBody = cForm.querySelector(".c-body"),
       cDone = document.getElementById("formDone"),
+      cHead = document.getElementById("doneHead"),
+      cText = document.getElementById("doneBody"),
+      cNote = document.getElementById("doneNote"),
+      cFallback = document.getElementById("doneFallback"),
       cCopy = document.getElementById("formCopy"),
+      cBtn = cForm.querySelector('button[type="submit"]'),
+      cBtnHTML = cBtn.innerHTML,
       OFFICE = "office@tujungachurch.com",
       lastMailto = "", lastPlain = "";
 
@@ -1143,14 +1153,65 @@ if(cForm){
     lastMailto = compose();
     window.location.href = lastMailto;
   }
-
-  cForm.addEventListener("submit", function(e){
-    e.preventDefault();
-    openMail();
+  function showPanel(){
     cDone.style.minHeight = cBody.offsetHeight + "px";
     cBody.hidden = true;
     cDone.hidden = false;
-    cDone.querySelector(".c-done-h").focus({preventScroll: true});
+    cHead.focus({preventScroll: true});
+  }
+  function stateSent(email){
+    cHead.innerHTML = "Message <em>sent.</em>";
+    cText.textContent = "Thank you for reaching out. Someone from the church will reply to ";
+    var who = document.createElement("strong");
+    who.textContent = email || "your email";
+    cText.appendChild(who);
+    cText.appendChild(document.createTextNode(" within a couple of days."));
+    cFallback.hidden = true;
+    cNote.textContent = "";
+  }
+  function stateHandoff(){
+    cHead.innerHTML = "Your email is <em>ready.</em>";
+    cText.textContent = "We could not send that from the website just now, so we opened your email "
+                      + "app with the message addressed to " + OFFICE + ". Press send there and it is on its way.";
+    cFallback.hidden = false;
+    cNote.innerHTML = 'Nothing opened? Email <a href="mailto:office@tujungachurch.com">office@tujungachurch.com</a>'
+                    + ' or call <a href="tel:+18183521481">818-352-1481</a>.';
+  }
+
+  cForm.addEventListener("submit", function(e){
+    e.preventDefault();
+    var bot = cForm.querySelector('[name="botcheck"]');
+    if(bot && bot.checked) return;
+    var email = field("email");
+    cBtn.disabled = true;
+    cBtn.textContent = "Sending\u2026";
+    var ctl = new AbortController();
+    var killer = setTimeout(function(){ ctl.abort(); }, 12000);
+    fetch("https://api.web3forms.com/submit", {
+      method: "POST",
+      body: new FormData(cForm),   /* simple request: no CORS preflight */
+      signal: ctl.signal
+    })
+    .then(function(r){
+      return r.json().catch(function(){ return {}; }).then(function(j){
+        if(!r.ok || j.success !== true) throw new Error(j.message || ("HTTP " + r.status));
+      });
+    })
+    .then(function(){
+      stateSent(email);
+      showPanel();
+    })
+    .catch(function(err){
+      if(window.console) console.warn("Contact form:", err && err.message);
+      openMail();
+      stateHandoff();
+      showPanel();
+    })
+    .then(function(){
+      clearTimeout(killer);
+      cBtn.disabled = false;
+      cBtn.innerHTML = cBtnHTML;
+    });
   });
 
   var openAgain = document.getElementById("formOpenAgain");
