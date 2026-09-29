@@ -454,6 +454,7 @@ a{color:inherit}
 .c-body{display:flex;flex-direction:column;gap:18px}
 .c-form .btn[disabled]{opacity:.65;cursor:progress;transform:none}
 .f-err{color:var(--flame-deep);font-size:.92em;line-height:1.5}
+.f-err a{color:inherit;font-weight:500;text-underline-offset:3px}
 .c-done{
   display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:16px;
   animation:doneIn .8s cubic-bezier(.22,1,.3,1) both;
@@ -576,20 +577,6 @@ a{color:inherit}
   .hero-bar{font-size:10px}
   .brand .b-sub{display:none}
   .hero .est{display:none}
-}
-
-/* Visit: fit the viewport on desktop \2014  spacing tracks screen height */
-@media (min-width:961px){
-  .visit{
-    min-height:100svh;
-    display:flex;flex-direction:column;justify-content:center;
-    padding-block:clamp(56px,8vh,120px);
-  }
-  .visit .section-head{margin-bottom:clamp(20px,3vh,44px)}
-  .visit .vlist{margin-top:clamp(16px,2.4vh,34px)}
-  .visit .vrow{padding:clamp(10px,1.8vh,22px) 0}
-  .visit .visit-ctas{margin-top:clamp(18px,2.6vh,38px)}
-  .visit-fig{min-height:0}
 }
 
 /* ============ reduced motion ============ */
@@ -921,7 +908,7 @@ a{color:inherit}
         <textarea name="message" rows="6" required placeholder="Write your message here..."></textarea>
       </label>
       <button class="btn btn-flame" type="submit">Send message <span class="arr">&#8594;</span></button>
-      <p class="f-err" id="formErr" role="alert" hidden></p>
+      <p class="f-err" id="formErr" role="alert" hidden>We couldn't send that from the website just now. <a id="formErrMail" href="mailto:office@tujungachurch.com">Send it as an email instead</a> (your message is already filled in), or call 818-352-1481.</p>
       <p class="f-note">Your message goes straight to the church inbox &#8212; we typically reply within a couple of days.</p>
       </div>
       <div class="c-done" id="formDone" aria-live="polite" hidden>
@@ -1140,10 +1127,12 @@ if(cForm && window.fetch){
     cErr.hidden = true;
     cBtn.disabled = true;
     cBtn.textContent = "Sending\u2026";
+    var ctl = new AbortController();
+    var killer = setTimeout(function(){ ctl.abort(); }, 12000);
     fetch(cForm.getAttribute("action").replace("formsubmit.co/", "formsubmit.co/ajax/"), {
       method: "POST",
-      headers: {"Content-Type": "application/json", "Accept": "application/json"},
-      body: JSON.stringify(data)
+      body: new FormData(cForm),   /* simple request: avoids the CORS preflight */
+      signal: ctl.signal
     })
     .then(function(r){
       return r.json().catch(function(){ return {}; }).then(function(j){
@@ -1158,11 +1147,18 @@ if(cForm && window.fetch){
       cDone.querySelector(".c-done-h").focus({preventScroll: true});
     })
     .catch(function(err){
-      if(window.console) console.warn("Contact form:", err.message);
-      cErr.textContent = "Your message didn\u2019t go through. Check your connection and try again, or email office@tujungachurch.com.";
+      if(window.console) console.warn("Contact form:", err && err.message);
+      var mail = document.getElementById("formErrMail");
+      if(mail){
+        mail.href = "mailto:office@tujungachurch.com"
+          + "?subject=" + encodeURIComponent("Website message: " + (data.topic || "General question"))
+          + "&body=" + encodeURIComponent("Name: " + (data.name || "") + "\nEmail: " + (data.email || "")
+                                          + "\n\n" + (data.message || ""));
+      }
       cErr.hidden = false;
     })
     .then(function(){
+      clearTimeout(killer);
       cBtn.disabled = false;
       cBtn.innerHTML = cBtnHTML;
     });
