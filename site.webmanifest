@@ -1,0 +1,15 @@
+{
+  "name": "Tujunga United Methodist Church",
+  "short_name": "Tujunga UMC",
+  "start_url": "https://liam-azizi.github.io/UMC/",
+  "display": "browser",
+  "background_color": "#FAF9F6",
+  "theme_color": "#D93A1E",
+  "icons": [
+    {
+      "src": "https://liam-azizi.github.io/UMC/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
