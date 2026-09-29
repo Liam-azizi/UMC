@@ -455,6 +455,13 @@ a{color:inherit}
 .c-form .btn[disabled]{opacity:.65;cursor:progress;transform:none}
 .f-err{color:var(--flame-deep);font-size:.92em;line-height:1.5}
 .f-err a{color:inherit;font-weight:500;text-underline-offset:3px}
+.c-done-actions{display:flex;flex-wrap:wrap;gap:12px}
+.f-note a{color:var(--ink);text-underline-offset:3px}
+.linkish{
+  background:none;border:0;padding:0;font:inherit;color:var(--ink);cursor:pointer;
+  text-decoration:underline;text-underline-offset:3px;
+}
+.linkish:focus-visible{outline:2px solid var(--flame);outline-offset:3px}
 .c-done{
   display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:16px;
   animation:doneIn .8s cubic-bezier(.22,1,.3,1) both;
@@ -873,12 +880,8 @@ a{color:inherit}
         <span>9901 Tujunga Canyon Blvd, Tujunga CA 91042</span>
       </div>
     </div>
-    <form class="c-form rv d1" id="contactForm" action="https://formsubmit.co/mohammadjamal.azizi@gmail.com" method="POST">
+    <form class="c-form rv d1" id="contactForm" action="mailto:office@tujungachurch.com" method="post" enctype="text/plain">
       <div class="c-body">
-      <input type="hidden" name="_subject" value="New message &#8212; Tujunga UMC website">
-      <input type="hidden" name="_template" value="table">
-      <input type="hidden" name="_captcha" value="false">
-      <input type="text" name="_honey" style="display:none" tabindex="-1" autocomplete="off" aria-hidden="true">
       <div class="f-row2">
         <label>Your name
           <input type="text" name="name" required autocomplete="name" placeholder="First and last name">
@@ -908,14 +911,17 @@ a{color:inherit}
         <textarea name="message" rows="6" required placeholder="Write your message here..."></textarea>
       </label>
       <button class="btn btn-flame" type="submit">Send message <span class="arr">&#8594;</span></button>
-      <p class="f-err" id="formErr" role="alert" hidden>We couldn't send that from the website just now. <a id="formErrMail" href="mailto:office@tujungachurch.com">Send it as an email instead</a> (your message is already filled in), or call 818-352-1481.</p>
-      <p class="f-note">Your message goes straight to the church inbox &#8212; we typically reply within a couple of days.</p>
+      <p class="f-note">Sending opens your email app with this message ready, addressed to the church office. We usually reply within a couple of days.</p>
       </div>
       <div class="c-done" id="formDone" aria-live="polite" hidden>
         <span class="c-done-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M5 12.5l4.5 4.5L19 7.5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-        <h3 class="c-done-h display" tabindex="-1">Message <em>sent.</em></h3>
-        <p class="c-done-p">Thank you for reaching out. Someone from the church will reply to <strong id="doneEmail"></strong> within a couple of days.</p>
-        <button type="button" class="btn btn-ghost-ink" id="formAgain">Send another message</button>
+        <h3 class="c-done-h display" tabindex="-1">Your email is <em>ready.</em></h3>
+        <p class="c-done-p">We opened your email app with this message addressed to <strong>office@tujungachurch.com</strong>. Press send there and it is on its way.</p>
+        <div class="c-done-actions">
+          <button type="button" class="btn btn-ink" id="formOpenAgain">Open my email app <span class="arr">&#8594;</span></button>
+          <button type="button" class="btn btn-ghost-ink" id="formCopy">Copy the message</button>
+        </div>
+        <p class="f-note">Nothing opened? Email <a href="mailto:office@tujungachurch.com">office@tujungachurch.com</a> or call <a href="tel:+18183521481">818-352-1481</a>. <button type="button" class="linkish" id="formAgain">Write another message</button></p>
       </div>
     </form>
   </div>
@@ -1111,64 +1117,79 @@ if(dd){
   addEventListener("keydown", function(e){ if(e.key === "Escape") ddSet(false); });
 }
 
-/* ---------- contact form: submit in place, no redirect ---------- */
+/* ---------- contact form: hands the message to the visitor's email app ---------- */
 var cForm = document.getElementById("contactForm");
-if(cForm && window.fetch){
+if(cForm){
   var cBody = cForm.querySelector(".c-body"),
       cDone = document.getElementById("formDone"),
-      cErr = document.getElementById("formErr"),
-      cBtn = cForm.querySelector('button[type="submit"]'),
-      cBtnHTML = cBtn.innerHTML;
+      cCopy = document.getElementById("formCopy"),
+      OFFICE = "office@tujungachurch.com",
+      lastMailto = "", lastPlain = "";
+
+  function field(n){
+    var el = cForm.querySelector('[name="' + n + '"]');
+    return el ? el.value.trim() : "";
+  }
+  function compose(){
+    var topic = field("topic") || "General question";
+    var subject = "Website message: " + topic;
+    var body = "Name: " + field("name") + "\nEmail: " + field("email")
+             + "\nAbout: " + topic + "\n\n" + field("message");
+    lastPlain = "To: " + OFFICE + "\nSubject: " + subject + "\n\n" + body;
+    return "mailto:" + OFFICE + "?subject=" + encodeURIComponent(subject)
+         + "&body=" + encodeURIComponent(body);
+  }
+  function openMail(){
+    lastMailto = compose();
+    window.location.href = lastMailto;
+  }
+
   cForm.addEventListener("submit", function(e){
     e.preventDefault();
-    if(cForm.querySelector('[name="_honey"]').value) return;
-    var data = {};
-    new FormData(cForm).forEach(function(v, k){ data[k] = v; });
-    cErr.hidden = true;
-    cBtn.disabled = true;
-    cBtn.textContent = "Sending\u2026";
-    var ctl = new AbortController();
-    var killer = setTimeout(function(){ ctl.abort(); }, 12000);
-    fetch(cForm.getAttribute("action").replace("formsubmit.co/", "formsubmit.co/ajax/"), {
-      method: "POST",
-      body: new FormData(cForm),   /* simple request: avoids the CORS preflight */
-      signal: ctl.signal
-    })
-    .then(function(r){
-      return r.json().catch(function(){ return {}; }).then(function(j){
-        if(!r.ok || String(j.success) !== "true") throw new Error(j.message || ("HTTP " + r.status));
-      });
-    })
-    .then(function(){
-      document.getElementById("doneEmail").textContent = data.email;
-      cDone.style.minHeight = cBody.offsetHeight + "px";
-      cBody.hidden = true;
-      cDone.hidden = false;
-      cDone.querySelector(".c-done-h").focus({preventScroll: true});
-    })
-    .catch(function(err){
-      if(window.console) console.warn("Contact form:", err && err.message);
-      var mail = document.getElementById("formErrMail");
-      if(mail){
-        mail.href = "mailto:office@tujungachurch.com"
-          + "?subject=" + encodeURIComponent("Website message: " + (data.topic || "General question"))
-          + "&body=" + encodeURIComponent("Name: " + (data.name || "") + "\nEmail: " + (data.email || "")
-                                          + "\n\n" + (data.message || ""));
-      }
-      cErr.hidden = false;
-    })
-    .then(function(){
-      clearTimeout(killer);
-      cBtn.disabled = false;
-      cBtn.innerHTML = cBtnHTML;
-    });
+    openMail();
+    cDone.style.minHeight = cBody.offsetHeight + "px";
+    cBody.hidden = true;
+    cDone.hidden = false;
+    cDone.querySelector(".c-done-h").focus({preventScroll: true});
   });
+
+  var openAgain = document.getElementById("formOpenAgain");
+  if(openAgain) openAgain.addEventListener("click", openMail);
+
+  if(cCopy) cCopy.addEventListener("click", function(){
+    var done = function(){
+      cCopy.textContent = "Copied";
+      setTimeout(function(){ cCopy.textContent = "Copy the message"; }, 2000);
+    };
+    var legacyCopy = function(){
+      var ta = document.createElement("textarea");
+      ta.value = lastPlain; ta.setAttribute("readonly", "");
+      ta.style.position = "fixed"; ta.style.opacity = "0";
+      document.body.appendChild(ta); ta.select(); ta.setSelectionRange(0, ta.value.length);
+      var ok = false;
+      try{ ok = document.execCommand("copy"); }catch(err){}
+      document.body.removeChild(ta);
+      if(ok){ done(); }
+      else{
+        cCopy.textContent = "Press Cmd/Ctrl+C";
+        setTimeout(function(){ cCopy.textContent = "Copy the message"; }, 2500);
+      }
+    };
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(lastPlain).then(done, legacyCopy);
+    }else{
+      legacyCopy();
+    }
+  });
+
   document.getElementById("formAgain").addEventListener("click", function(){
     cForm.reset();
     var topic = document.getElementById("topicDD");
     if(topic){
       var first = topic.querySelector(".dd-list li");
-      topic.querySelectorAll(".dd-list li").forEach(function(o){ o.setAttribute("aria-selected", o === first ? "true" : "false"); });
+      topic.querySelectorAll(".dd-list li").forEach(function(o){
+        o.setAttribute("aria-selected", o === first ? "true" : "false");
+      });
       topic.querySelector(".dd-val").textContent = first.textContent;
       topic.querySelector('input[name="topic"]').value = first.textContent;
     }
